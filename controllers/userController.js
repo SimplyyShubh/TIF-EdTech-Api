@@ -1,5 +1,6 @@
 const db = require("../models");
 const bcrypt = require("bcrypt");
+const { sign } = require("jsonwebtoken");
 
 //Get the user model
 const User = db.users;
@@ -55,7 +56,7 @@ const createUser = async (req, res) => {
 
     //Create a new user
     // console.log(details);
-    user = await User.create(details,{logging: console.log});
+    user = await User.create(details, { logging: console.log });
 
     //Send the user details
     res.status(201).json({
@@ -81,6 +82,7 @@ const createUser = async (req, res) => {
 const loginUser = async (req, res) => {
   let err = "";
 
+  //check if both email & password is provided
   let details = {
     email: req.body.email ? req.body.email : (err = "Email is required"),
     password: req.body.password
@@ -100,33 +102,39 @@ const loginUser = async (req, res) => {
   try {
     //Check if the user exists
     let user = await User.findOne({ where: { email: details.email } });
-    if (!user) return res.status(400).json({
+    if (!user)
+      return res.status(400).json({
         status: false,
         errors: {
-            message: "User does not exist"
-        }
-    });
+          message: "User does not exist",
+        },
+      });
 
     const hashPassword = await bcrypt.hash(details.password, 10);
-    // console.log("hash=> " + hashPassword);
 
     //Check if the password is Incorrect
     const validate = await bcrypt.compare(details.password, hashPassword);
 
-    if (!validate) return res.status(400).json({
-      status: false,
-      errors: {
-        message: "Password is incorrect",
-      },
-    });
-    
+    if (!validate)
+      return res.status(400).json({
+        status: false,
+        errors: {
+          message: "Password is incorrect",
+        },
+      });
+
     delete user.dataValues.password;
+
+    //Create a JWT token with userId as well as their scopes
+    const jstoken = await createJWT(user);
+
     //Send the user details
     res.status(200).json({
       status: true,
       content: {
-        data: user
-      }
+        data: user,
+        token: jstoken,
+      },
     });
   } catch (error) {
     console.error(error.message);
@@ -146,8 +154,8 @@ const getAllUsers = async (req, res) => {
     res.status(200).json({
       status: true,
       content: {
-        users
-      }
+        users,
+      },
     });
   } catch (error) {
     console.error(error.message);
@@ -155,7 +163,7 @@ const getAllUsers = async (req, res) => {
       status: false,
       errors: {
         message: "Something went wrong.",
-      }
+      },
     });
   }
 };
@@ -163,19 +171,22 @@ const getAllUsers = async (req, res) => {
 //Get a user by id
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findOne({ where: { id: req.params.id } });
-    if (!user) return res.status(400).json(
-      {
+    //get User by id and its associated role
+    const user = await User.findOne({
+      where: { id: req.params.id },
+      include: [Role],
+    });
+    if (!user)
+      return res.status(400).json({
         status: false,
         errors: {
-          message: "User does not exist"
-        }
-      }
-    );
+          message: "User does not exist",
+        },
+      });
 
     res.status(200).json({
       status: true,
-      content: {user}
+      content: { user },
     });
   } catch (error) {
     console.error(error.message);
@@ -183,9 +194,30 @@ const getUserById = async (req, res) => {
       status: false,
       errors: {
         message: "Something went wrong.",
-      }
+      },
     });
   }
+};
+
+const createJWT = async (user) => {
+  //get user associated role and its scopes
+  const scopes = await Role.findOne({
+    where: { id: user.roleId },
+  });
+
+  //create a token
+  const token = sign(
+    {
+      id: user.id,
+      scopes: scopes ? scopes.scopes : [],
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "10h",
+    }
+  );
+  // console.log(token);
+  return token;
 };
 
 module.exports = {

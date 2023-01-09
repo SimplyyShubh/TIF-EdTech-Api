@@ -6,12 +6,12 @@ require("dotenv").config();
 
 const app = express();
 
-//Midlewares
+//Middlewares
 app.use(cors()) ;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-//Routes
+//HomePage
 app.get("/", (req, res) => {
   res.json({ a: "Test to Home page" });
 });
