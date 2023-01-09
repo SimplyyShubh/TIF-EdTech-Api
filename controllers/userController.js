@@ -55,9 +55,9 @@ const createUser = async (req, res) => {
     details.password = hashPassword;
 
     //Create a new user
-    // console.log(details);
-    user = await User.create(details, { logging: console.log });
-
+    user = await User.create(details);
+    delete user.dataValues.password;
+    
     //Send the user details
     res.status(201).json({
       status: true,
